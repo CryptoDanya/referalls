@@ -101,8 +101,13 @@ async def cmd_start(message: Message):
             "INSERT OR IGNORE INTO users (user_id) VALUES (?)", (message.from_user.id,)
         )
         await db.commit()
-    await message.answer("👋 **Добро пожаловать в сервис по накрутке рефералов!**\nВыберите нужный раздел из меню ниже:", 
-                         reply_markup=main_keyboard(), parse_mode="Markdown")
+        
+    welcome_text = (
+        f"👋 **Приветствую, {message.from_user.first_name}!**\n\n"
+        f"🚀 Добро пожаловать в лучший автоматизированный сервис по продаже рефералов для вывода NFT с ботов.\n"
+        f"Выберите нужный раздел в меню ниже:"
+    )
+    await message.answer(welcome_text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
 # --- РАЗДЕЛ: ПРОФИЛЬ ---
 @router.callback_query(F.data == "profile")
@@ -201,6 +206,31 @@ async def process_quantity(message: Message, state: FSMContext):
     
     total_uah = total_stars * STAR_TO_UAH
     total_usd = total_stars * STAR_TO_USD
+
+    # Проверяем баланс пользователя (для примера проверяем эквивалент в USD или Stars/фиате, либо сделаем проверку по основной валюте. Здесь проверим по USD как эквивалент Stars, либо добавим баланс звёзд. Сделаем проверку по USD/UAH для простоты, или просто выведем кнопку пополнения, если баланс 0)
+    async with aiosqlite.connect("shop.db") as db:
+        async with db.execute("SELECT balance_uah, balance_rub, balance_usd, currency FROM users WHERE user_id = ?", (message.from_user.id,)) as cursor:
+            row = await cursor.fetchone()
+            b_uah, b_rub, b_usd, curr = row if row else (0.0, 0.0, 0.0, 'UAH')
+
+    # Выбираем текущий баланс в зависимости от валюты пользователя
+    current_balance = b_uah if curr == 'UAH' else (b_rub if curr == 'RUB' else b_usd)
+    required_amount = total_uah if curr == 'UAH' else (total_stars * 1.8 if curr == 'RUB' else total_usd)
+
+    if current_balance < required_amount:
+        await state.clear()
+        kb_dep = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="💳 Пополнить баланс", callback_data="deposit")],
+            [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_main")]
+        ])
+        await message.answer(
+            f"❌ **Недостаточно средств на балансе!**\n\n"
+            f"💳 Требуется: `{required_amount:.2f} {curr}`\n"
+            f"💰 Ваш баланс: `{current_balance:.2f} {curr}`\n\n"
+            f"Пожалуйста, пополните баланс для оформления заказа.",
+            reply_markup=kb_dep, parse_mode="Markdown"
+        )
+        return
     
     await state.clear()
     
@@ -329,7 +359,11 @@ async def send_reply_to_user(message: Message, state: FSMContext):
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(call: CallbackQuery, state: FSMContext):
     await state.clear()
-    await call.message.edit_text("👋 **Главное меню**", reply_markup=main_keyboard(), parse_mode="Markdown")
+    menu_text = (
+        f"👋 **Главное меню**\n\n"
+        f"Выберите нужный раздел ниже:"
+    )
+    await call.message.edit_text(menu_text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
 # --- ЗАПУСК ---
 async def main():
