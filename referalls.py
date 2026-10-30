@@ -12,7 +12,7 @@ from aiogram.types import (
 
 # --- НАСТРОЙКИ ---
 BOT_TOKEN = "9025563353:AAFpgVvaqnecAFUE44S2cjpxgT-v8hM85Ok"
-ADMIN_ID = 8789111923  # Твой Telegram ID (число)
+ADMIN_ID = 8789111923  
 SUPPORT_USERNAME = "@DanyaMzx"
 
 PRICE_PER_REF_STARS = 25
@@ -24,7 +24,6 @@ STAR_TO_USD = 0.02
 # --- ИНИЦИАЛИЗАЦИЯ БД ---
 async def init_db():
     async with aiosqlite.connect("shop.db") as db:
-        # Таблица пользователей
         await db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 user_id INTEGER PRIMARY KEY,
@@ -35,8 +34,6 @@ async def init_db():
                 joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Таблица заказов рефералов
         await db.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 order_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,8 +45,6 @@ async def init_db():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Таблица отзывов
         await db.execute("""
             CREATE TABLE IF NOT EXISTS reviews (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,9 +97,15 @@ async def cmd_start(message: Message):
         )
         await db.commit()
         
+    try:
+        await message.delete()
+    except Exception:
+        pass
+        
     welcome_text = (
         f"👋 **Приветствую, {message.from_user.first_name}!**\n\n"
-        f"🚀 Добро пожаловать в лучший автоматизированный сервис по продаже рефералов для вывода NFT с ботов.\n"
+        f"🔥 **Хочешь вывести NFT? Тебе к нам!**\n\n"
+        f"🚀 Добро пожаловать в лучший автоматизированный сервис по продаже рефералов.\n"
         f"Выберите нужный раздел в меню ниже:"
     )
     await message.answer(welcome_text, reply_markup=main_keyboard(), parse_mode="Markdown")
@@ -130,11 +131,20 @@ async def show_profile(call: CallbackQuery):
         [InlineKeyboardButton(text="💱 Сменить основную валюту", callback_data="change_curr")],
         [InlineKeyboardButton(text="⬅️ В главное меню", callback_data="back_to_main")]
     ])
-    await call.message.edit_text(text, reply_markup=kb, parse_mode="Markdown")
+    
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer(text, reply_markup=kb, parse_mode="Markdown")
 
 @router.callback_query(F.data == "change_curr")
 async def change_curr(call: CallbackQuery):
-    await call.message.edit_text("Выберите валюту по умолчанию:", reply_markup=currency_keyboard())
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer("Выберите валюту по умолчанию:", reply_markup=currency_keyboard())
 
 @router.callback_query(F.data.startswith("set_curr_"))
 async def set_currency(call: CallbackQuery):
@@ -154,11 +164,19 @@ async def deposit_menu(call: CallbackQuery):
         [InlineKeyboardButton(text="⭐ Telegram Stars", callback_data="pay_stars")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_main")]
     ])
-    await call.message.edit_text("💳 **Выберите способ пополнения баланса:**", reply_markup=kb, parse_mode="Markdown")
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer("💳 **Выберите способ пополнения баланса:**", reply_markup=kb, parse_mode="Markdown")
 
 @router.callback_query(F.data.in_(["pay_card", "pay_crypto", "pay_stars"]))
 async def process_pay_method(call: CallbackQuery):
-    await call.message.edit_text(
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer(
         f"ℹ️ Для пополнения счета этим способом, пожалуйста, напишите администратору: {SUPPORT_USERNAME}",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Назад", callback_data="deposit")]])
     )
@@ -167,7 +185,11 @@ async def process_pay_method(call: CallbackQuery):
 @router.callback_query(F.data == "buy_refs")
 async def start_buy_refs(call: CallbackQuery, state: FSMContext):
     await state.set_state(OrderState.waiting_for_bot_name)
-    await call.message.edit_text(
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer(
         "🤝 **Для какого бота вам нужны рефералы?**\n"
         "Отправьте имя бота (например, `@example_bot`) или вашу реферальную ссылку:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="back_to_main")]])
@@ -178,6 +200,11 @@ async def process_bot_name(message: Message, state: FSMContext):
     await state.update_data(target_bot=message.text)
     await state.set_state(OrderState.waiting_for_quantity)
     
+    try:
+        await message.delete()
+    except Exception:
+        pass
+        
     cost_min = 5 * PRICE_PER_REF_STARS
     cost_max = 100 * PRICE_PER_REF_STARS
     
@@ -191,6 +218,11 @@ async def process_bot_name(message: Message, state: FSMContext):
 
 @router.message(OrderState.waiting_for_quantity)
 async def process_quantity(message: Message, state: FSMContext):
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     if not message.text.isdigit():
         await message.answer("⚠️ Пожалуйста, введите число от 5 до 100:")
         return
@@ -207,13 +239,11 @@ async def process_quantity(message: Message, state: FSMContext):
     total_uah = total_stars * STAR_TO_UAH
     total_usd = total_stars * STAR_TO_USD
 
-    # Проверяем баланс пользователя (для примера проверяем эквивалент в USD или Stars/фиате, либо сделаем проверку по основной валюте. Здесь проверим по USD как эквивалент Stars, либо добавим баланс звёзд. Сделаем проверку по USD/UAH для простоты, или просто выведем кнопку пополнения, если баланс 0)
     async with aiosqlite.connect("shop.db") as db:
         async with db.execute("SELECT balance_uah, balance_rub, balance_usd, currency FROM users WHERE user_id = ?", (message.from_user.id,)) as cursor:
             row = await cursor.fetchone()
             b_uah, b_rub, b_usd, curr = row if row else (0.0, 0.0, 0.0, 'UAH')
 
-    # Выбираем текущий баланс в зависимости от валюты пользователя
     current_balance = b_uah if curr == 'UAH' else (b_rub if curr == 'RUB' else b_usd)
     required_amount = total_uah if curr == 'UAH' else (total_stars * 1.8 if curr == 'RUB' else total_usd)
 
@@ -234,7 +264,6 @@ async def process_quantity(message: Message, state: FSMContext):
     
     await state.clear()
     
-    # Сохраняем заказ в базу данных
     async with aiosqlite.connect("shop.db") as db:
         await db.execute(
             "INSERT INTO orders (user_id, target_bot, quantity, total_stars) VALUES (?, ?, ?, ?)",
@@ -259,13 +288,17 @@ async def process_quantity(message: Message, state: FSMContext):
 async def confirm_order(call: CallbackQuery):
     _, _, qty, total_stars = call.data.split("_")
     
-    await call.message.edit_text(
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+        
+    await call.message.answer(
         "✅ **Заказ успешно сформирован и сохранен в базе!**\n"
         "Администратор свяжется с вами для запуска работы.",
         reply_markup=main_keyboard(), parse_mode="Markdown"
     )
     
-    # Уведомление в админку
     bot = call.bot
     await bot.send_message(
         ADMIN_ID,
@@ -282,7 +315,11 @@ async def reviews_menu(call: CallbackQuery):
         [InlineKeyboardButton(text="✍️ Оставить отзыв", callback_data="add_review")],
         [InlineKeyboardButton(text="⬅️ Назад", callback_data="back_to_main")]
     ])
-    await call.message.edit_text(
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer(
         "⭐ **Раздел отзывов**\nЗдесь вы можете оставить отзыв о работе нашего сервиса. После модерации он будет опубликован!",
         reply_markup=kb, parse_mode="Markdown"
     )
@@ -290,10 +327,19 @@ async def reviews_menu(call: CallbackQuery):
 @router.callback_query(F.data == "add_review")
 async def start_add_review(call: CallbackQuery, state: FSMContext):
     await state.set_state(ReviewState.waiting_for_text)
-    await call.message.edit_text("Напишите ваш отзыв в сообщении ниже:")
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
+    await call.message.answer("Напишите ваш отзыв в сообщении ниже:")
 
 @router.message(ReviewState.waiting_for_text)
 async def process_review_text(message: Message, state: FSMContext):
+    try:
+        await message.delete()
+    except Exception:
+        pass
+
     async with aiosqlite.connect("shop.db") as db:
         cursor = await db.execute(
             "INSERT INTO reviews (user_id, text) VALUES (?, ?)", (message.from_user.id, message.text)
@@ -304,7 +350,6 @@ async def process_review_text(message: Message, state: FSMContext):
     await state.clear()
     await message.answer("Спасибо! Ваш отзыв отправлен на модерацию.", reply_markup=main_keyboard())
     
-    # Отправка отзывов модераторам
     kb_mod = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="✅ Одобрить", callback_data=f"approve_rev_{review_id}"),
          InlineKeyboardButton(text="❌ Отклонить", callback_data=f"reject_rev_{review_id}")],
@@ -346,6 +391,10 @@ async def start_reply_user(call: CallbackQuery, state: FSMContext):
 
 @router.message(AdminReplyState.waiting_for_reply)
 async def send_reply_to_user(message: Message, state: FSMContext):
+    try:
+        await message.delete()
+    except Exception:
+        pass
     target_id = AdminReplyState.target_user_id
     bot = message.bot
     try:
@@ -359,11 +408,16 @@ async def send_reply_to_user(message: Message, state: FSMContext):
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(call: CallbackQuery, state: FSMContext):
     await state.clear()
+    try:
+        await call.message.delete()
+    except Exception:
+        pass
     menu_text = (
         f"👋 **Главное меню**\n\n"
+        f"🔥 **Хочешь вывести NFT? Тебе к нам!**\n\n"
         f"Выберите нужный раздел ниже:"
     )
-    await call.message.edit_text(menu_text, reply_markup=main_keyboard(), parse_mode="Markdown")
+    await call.message.answer(menu_text, reply_markup=main_keyboard(), parse_mode="Markdown")
 
 # --- ЗАПУСК ---
 async def main():
